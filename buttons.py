@@ -9,7 +9,7 @@ from .settings import RADIO_PIN, MPC_PIN, STOP_PIN, HALT_PIN, RADIO_STATIONS
 GPIO.setmode(GPIO.BCM)
 
 
-class Button():
+class Button(dict):
 
     prev_input = None
 
@@ -49,6 +49,7 @@ class RadioButton(Button):
         self.stations_count = len(RADIO_STATIONS)
 
     def run(self):
+        print "Radio button pressed"
         self.stop()
         self.current_station = self.next_station
         print "Playing %s\n" % RADIO_STATIONS[self.current_station][1]
@@ -85,6 +86,7 @@ class MPCButton(Button):
         pass
 
     def run(self):
+        print "Music button pressed"
         self.stop()
         self.play()
         if self.play_next_song:
@@ -100,6 +102,7 @@ class StopButton(Button):
         super(StopButton, self).__init__(STOP_PIN)
 
     def run(self):
+        print "Stop button pressed"
         self.stop()
 
 
@@ -109,5 +112,6 @@ class HaltButton(Button):
         super(HaltButton, self).__init__(HALT_PIN)
 
     def run(self):
+        print "Shutdown button pressed"
         self.stop()
         os.system("sudo halt")
