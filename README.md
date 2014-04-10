@@ -35,9 +35,3 @@ System stores status in /var/run/nas
 ### Display info
 
 * Current quality used: cat /proc/asound/card0/pcm0p/sub0/hw_params
-
-### Settings file
-
-* Pin configuration
-
-### All buttons in one file
