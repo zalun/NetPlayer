@@ -28,7 +28,7 @@ Halt the system (software shutdown)
 
 ## ToDo
 
-## Storing Status
+### Storing Status
 
 System stores status in /var/run/nas
 
