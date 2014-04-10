@@ -6,6 +6,7 @@ radio = RadioButton()
 mpc = MPCButton()
 stop = StopButton()
 
+print "Listening to buttons:"
 while True:
     radio.check()
     mpc.check()
