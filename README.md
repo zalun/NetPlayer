@@ -4,6 +4,12 @@ Buttons of a Network Player build on top of Raspberry PI and HifiBerry.
 
 System plays music using MPD (from network drive) or mplayer (for radio).
 
+## Install
+
+Add buttons to pins specified in `settings.py`
+Clone repository 
+Run from parent directory - `python -m NetPlayer.listen`
+
 ## Logic
 
 ### MPD Button

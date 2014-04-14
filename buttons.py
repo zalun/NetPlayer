@@ -4,7 +4,8 @@ import subprocess
 import time
 import RPi.GPIO as GPIO
 
-from .settings import RADIO_PIN, MPC_PIN, STOP_PIN, HALT_PIN, RADIO_STATIONS
+from .settings import logger, RADIO_PIN, MPC_PIN, STOP_PIN, HALT_PIN, RADIO_STATIONS
+
 
 GPIO.setmode(GPIO.BCM)
 
@@ -49,12 +50,12 @@ class RadioButton(Button):
         self.stations_count = len(RADIO_STATIONS)
 
     def run(self):
-        print "Radio button pressed"
+        logger.info("Radio button pressed")
         self.stop()
         self.current_station = self.next_station
         print "Playing %s\n" % RADIO_STATIONS[self.current_station][1]
-        args = shlex.split(
-            "mplayer -loop 0 %s" % RADIO_STATIONS[self.current_station][0])
+	command = "mplayer -loop 0 -ao alsa:device=hw=0.0 -cache 384 %s"
+        args = shlex.split(command % RADIO_STATIONS[self.current_station][0])
         subprocess.Popen(args)
         self.next_station = (self.next_station + 1) % self.stations_count
 
@@ -86,7 +87,7 @@ class MPCButton(Button):
         pass
 
     def run(self):
-        print "Music button pressed"
+        logger.info("Music button pressed")
         self.stop()
         self.play()
         if self.play_next_song:
@@ -102,7 +103,7 @@ class StopButton(Button):
         super(StopButton, self).__init__(STOP_PIN)
 
     def run(self):
-        print "Stop button pressed"
+        logger.info("Stop button pressed")
         self.stop()
 
 
@@ -112,6 +113,6 @@ class HaltButton(Button):
         super(HaltButton, self).__init__(HALT_PIN)
 
     def run(self):
-        print "Shutdown button pressed"
+        logger.info("Shutdown button pressed")
         self.stop()
         os.system("sudo halt")
