@@ -54,7 +54,7 @@ class RadioButton(Button):
         self.stop()
         self.current_station = self.next_station
         print "Playing %s\n" % RADIO_STATIONS[self.current_station][1]
-	command = "mplayer -loop 0 -ao alsa:device=hw=0.0 -cache 384 %s"
+	command = "mplayer -loop 0 -ao alsa:device=hw=0.0 -cache 512 -cache-min 10 %s"
         args = shlex.split(command % RADIO_STATIONS[self.current_station][0])
         subprocess.Popen(args)
         self.next_station = (self.next_station + 1) % self.stations_count
@@ -105,6 +105,7 @@ class StopButton(Button):
     def run(self):
         logger.info("Stop button pressed")
         self.stop()
+        os.system("mpc update")
 
 
 class HaltButton(Button):
