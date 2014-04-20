@@ -4,13 +4,23 @@ import subprocess
 import time
 import RPi.GPIO as GPIO
 
-from .settings import logger, RADIO_PIN, MPC_PIN, STOP_PIN, HALT_PIN, RADIO_STATIONS
+from .settings import (logger,
+                       RADIO_STATIONS, TEST_DIR)
 
 
+# set the BCM numbering mode
 GPIO.setmode(GPIO.BCM)
 
 
-class Button(dict):
+status = {
+    "playing": False,
+    "object": None
+}
+
+active_buttons = []
+
+
+class Button(object):
 
     prev_input = None
 
@@ -18,17 +28,21 @@ class Button(dict):
         """Assign pin"""
         self.pin = pin
         GPIO.setup(self.pin, GPIO.IN)
+        active_buttons.append(self)
+        logger.info("Pin %d assigned to %s" % (self.pin, self.name()))
 
     def run(self):
         """Placeholder to run specific buttons"""
-        pass
+        logger.info("Pressed %s" % self.name())
+        status['object'] = self
+        status['playing'] = True
 
-    def stop(self):
-        os.system("mpc stop")
-        os.system("killall mplayer")
-        os.system("sudo /etc/init.d/shairport stop")
-        time.sleep(0.5)
-        os.system("sudo /etc/init.d/shairport start")
+    @classmethod
+    def stop(cls):
+        """Method to stop playing"""
+        if status['playing']:
+            status['object'] = None
+            status['playing'] = False
 
     def check(self):
         """Has the button been pressed?"""
@@ -38,82 +52,139 @@ class Button(dict):
         self.prev_input = inp
 
 
-class RadioButton(Button):
+class MplayerButton(Button):
 
-    current_station = None
+    current_url = None
+    next_url = None
 
-    next_station = None
+    def __init__(self, pin, urls):
+        super(MplayerButton, self).__init__(pin)
+        self.urls = urls
+        self.next_url = 0
+        self.urls_count = len(self.urls)
 
-    def __init__(self):
-        super(RadioButton, self).__init__(RADIO_PIN)
-        self.next_station = 0
-        self.stations_count = len(RADIO_STATIONS)
+    def stop(self):
+        super(MplayerButton, self).stop()
+        logger.info('Stopping mplayer')
+        os.system("killall mplayer")
 
     def run(self):
-        logger.info("Radio button pressed")
         self.stop()
-        self.current_station = self.next_station
-        print "Playing %s\n" % RADIO_STATIONS[self.current_station][1]
-	command = "mplayer -loop 0 -ao alsa:device=hw=0.0 -cache 512 -cache-min 10 %s"
-        args = shlex.split(command % RADIO_STATIONS[self.current_station][0])
+        self.current_url = self.next_url
+        logger.info('Playing %s' % self.urls[self.current_url][1])
+        command = 'mplayer -loop 0 -ao alsa:device=hw=0.0 -cache 512 -cache-min 10 "%s"'
+        args = shlex.split(command % self.urls[self.current_url][0])
         subprocess.Popen(args)
-        self.next_station = (self.next_station + 1) % self.stations_count
+        self.next_url = (self.current_url + 1) % self.urls_count
+        super(MplayerButton, self).run()
+
+    @classmethod
+    def name(cls):
+        return "Mplayer button"
 
 
 class MPCButton(Button):
 
     play_next_song = None
 
-    def __init__(self):
-        super(MPCButton, self).__init__(MPC_PIN)
+    def __init__(self, pin):
+        super(MPCButton, self).__init__(pin)
         self.next_song = False
 
-    def play(self):
+    def stop(self):
+        super(MPCButton, self).stop()
+        os.system("mpc stop")
+
+    @classmethod
+    def play(cls):
+        logger.info('mpc play')
         os.system("mpc play")
 
-    def next(self):
+    @classmethod
+    def next(cls):
+        logger.info('mpc next')
         os.system("mpc next")
 
-    def stop(self):
-        os.system("killall mplayer")
-        os.system("sudo /etc/init.d/shairport stop")
-        time.sleep(0.5)
-        os.system("sudo /etc/init.d/shairport start")
-
-    def getPureStatus(self):
-        return subprocess.check_output(["mpc", "status"])
+    @classmethod
+    def getPureStatus(cls):
+        s = subprocess.check_output(["mpc", "status"])
+        logger.debug('mpc status: %s' % s)
+        return s
 
     def getStatus(self):
         pass
 
     def run(self):
-        logger.info("Music button pressed")
-        self.stop()
-        self.play()
-        if self.play_next_song:
-            self.next()
+        """Start playing, if already playing switch to next song, if all songs
+        played, start from beginning"""
 
-        status = self.getPureStatus()
-        self.play_next_song = (len(status.split("\n")) > 2)
+        logger.info("Music button pressed")
+        if status['playing']:
+            logger.info('Something was playing')
+            if status['object'] != self:
+                logger.info('It wasn\'t MPD')
+                status['object'].stop()
+            else:
+                logger.info('It was MPD')
+                if self.play_next_song:
+                    logger.info('[play next song] is on')
+                    self.next()
+                else:
+                    logger.info('[play next song] is off')
+                    self.play()
+        else:
+            logger.info("Nothing was playing")
+            self.play()
+
+        super(MPCButton, self).run()
+
+        mpc_status = self.getPureStatus()
+        self.play_next_song = (len(mpc_status.split("\n")) > 2)
+
+    @classmethod
+    def name(cls):
+        return "MPC button"
 
 
 class StopButton(Button):
 
-    def __init__(self):
-        super(StopButton, self).__init__(STOP_PIN)
+    def __init__(self, pin):
+        super(StopButton, self).__init__(pin)
+
+    def stop(self):
+        pass
+
+    def stopall(self):
+        """Hard stop everything"""
+        for button in active_buttons:
+            button.stop()
 
     def run(self):
         logger.info("Stop button pressed")
-        self.stop()
+        self.stopall()
+        # request mpc database update
         os.system("mpc update")
+        # restart AirPlay
+        os.system("sudo /etc/init.d/shairport stop")
+        time.sleep(0.5)
+        os.system("sudo /etc/init.d/shairport start")
+
+    @classmethod
+    def name(cls):
+        return 'Stop Button'
 
 
-class HaltButton(Button):
+class TestButton(Button):
+    """Use mplayer to play some test sounds"""
 
-    def __init__(self):
-        super(HaltButton, self).__init__(HALT_PIN)
+    current = 0
+
+    def __init__(self, pin):
+        super(TestButton, self).__init__(pin)
 
     def run(self):
-        logger.info("Shutdown button pressed")
-        self.stop()
-        os.system("sudo halt")
+        logger.info("Test button pressed")
+
+    @classmethod
+    def name(cls):
+        return 'Test Button'
